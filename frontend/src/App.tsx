@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "@/api";
 import { ExpenseForm } from "@/components/ExpenseForm";
 import { ExpenseList } from "@/components/ExpenseList";
+import { CategorySummary } from "@/components/CategorySummary";
 import { Hero195 } from "@/components/ui/hero-195";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +27,10 @@ export default function App() {
   // All categories that exist on the server, regardless of the current
   // filter — so picking one in the dropdown doesn't make the others vanish.
   const [allCategories, setAllCategories] = useState<string[]>([]);
+  // Unfiltered list, used to compute the per-category summary so it doesn't
+  // shrink when the user applies a filter to the table below.
+  const [summary, setSummary] = useState<ListResponse | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
 
   const refreshCategories = useCallback((signal?: AbortSignal) => {
     return api
@@ -34,11 +39,22 @@ export default function App() {
       .catch(() => { /* non-fatal: dropdown just stays as-is */ });
   }, []);
 
+  const refreshSummary = useCallback((signal?: AbortSignal) => {
+    return api
+      .list({ sort: "date_desc" }, signal)
+      .then((res) => setSummary(res))
+      .catch(() => { /* non-fatal: summary card just keeps last value */ })
+      .finally(() => {
+        if (!signal?.aborted) setSummaryLoading(false);
+      });
+  }, []);
+
   useEffect(() => {
     const ctrl = new AbortController();
     void refreshCategories(ctrl.signal);
+    void refreshSummary(ctrl.signal);
     return () => ctrl.abort();
-  }, [refreshCategories]);
+  }, [refreshCategories, refreshSummary]);
 
   const reload = useCallback(
     (signal?: AbortSignal) => {
@@ -119,8 +135,9 @@ export default function App() {
       });
       void reload();
       void refreshCategories();
+      void refreshSummary();
     },
-    [category, sort, reload, refreshCategories],
+    [category, sort, reload, refreshCategories, refreshSummary],
   );
 
   // Include the currently-selected filter even if the server hasn't
@@ -146,6 +163,11 @@ export default function App() {
               knownCategories={allCategories}
             />
           </div>
+
+          <CategorySummary
+            expenses={summary?.expenses ?? []}
+            loading={summaryLoading}
+          />
 
           <Card id="expenses">
             <CardHeader>
