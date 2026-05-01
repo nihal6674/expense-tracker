@@ -23,6 +23,22 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [category, setCategory] = useState<string>(ALL);
   const [sort, setSort] = useState<Sort>("date_desc");
+  // All categories that exist on the server, regardless of the current
+  // filter — so picking one in the dropdown doesn't make the others vanish.
+  const [allCategories, setAllCategories] = useState<string[]>([]);
+
+  const refreshCategories = useCallback((signal?: AbortSignal) => {
+    return api
+      .categories(signal)
+      .then((res) => setAllCategories(res.categories))
+      .catch(() => { /* non-fatal: dropdown just stays as-is */ });
+  }, []);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    void refreshCategories(ctrl.signal);
+    return () => ctrl.abort();
+  }, [refreshCategories]);
 
   const reload = useCallback(
     (signal?: AbortSignal) => {
@@ -102,21 +118,18 @@ export default function App() {
         };
       });
       void reload();
+      void refreshCategories();
     },
-    [category, sort, reload],
+    [category, sort, reload, refreshCategories],
   );
 
-  const knownCategories = useMemo(() => {
-    if (!data) return [];
-    return Array.from(new Set(data.expenses.map((e) => e.category)));
-  }, [data]);
-
+  // Include the currently-selected filter even if the server hasn't
+  // reported it yet (e.g. just-created category racing with the refresh).
   const allCategoriesForFilter = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set(allCategories);
     if (category !== ALL) set.add(category);
-    for (const e of data?.expenses ?? []) set.add(e.category);
     return Array.from(set).sort();
-  }, [data, category]);
+  }, [allCategories, category]);
 
   const scrollToForm = () =>
     document.getElementById("add-expense")?.scrollIntoView({ behavior: "smooth" });
@@ -130,7 +143,7 @@ export default function App() {
           <div id="add-expense">
             <ExpenseForm
               onCreated={handleCreated}
-              knownCategories={knownCategories}
+              knownCategories={allCategories}
             />
           </div>
 

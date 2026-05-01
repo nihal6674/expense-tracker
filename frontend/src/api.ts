@@ -69,6 +69,10 @@ export const api = {
       body: JSON.stringify(input),
     });
   },
+
+  categories(signal?: AbortSignal): Promise<{ categories: string[] }> {
+    return request<{ categories: string[] }>("/expenses/categories", {}, { signal });
+  },
 };
 
 export { ApiError };
